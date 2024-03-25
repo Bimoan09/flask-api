@@ -25,7 +25,7 @@ def add_customer():
     return jsonify(response), 201
 
 # Route to retrieve all customers
-@app.route('/customer', methods=['GET'])
+@app.route('/customers', methods=['GET'])
 def get_customers():
     all_customers = customers.find()
     output = []
