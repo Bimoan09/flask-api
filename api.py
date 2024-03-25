@@ -160,20 +160,40 @@ def delete_product(product_id):
 
 
 # Route to create a new sale
+from bson.objectid import ObjectId
+
+
 @app.route('/sale', methods=['POST'])
 def add_sale():
     customer_id = request.json['customer_id']
     product_id = request.json['product_id']
-    unit_price = request.json['unit_price']
     qty = request.json['qty']
+
+    # Fetching product details from the database
+    product = products.find_one({'_id': ObjectId(product_id)})
+    if product is None:
+        return jsonify({"message": "Product not found"}), 404
+
+    unit_price = product['unit_price']
     total_price = unit_price * qty
-    new_sale = {'customer_id': customer_id, 'product_id': product_id, 'unit_price': unit_price, 'qty': qty, 'total_price': total_price}
+
+    new_sale = {
+        'customer_id': customer_id,
+        'product_id': product_id,
+        'unit_price': unit_price,
+        'qty': qty,
+        'total_price': total_price
+    }
+
     sale_id = sales.insert_one(new_sale)
+
     response = {
         "message": "Sale successfully created",
         "sale_id": str(sale_id.inserted_id)
     }
+
     return jsonify(response), 201
+
 
 # Route to retrieve all sales
 @app.route('/sale', methods=['GET'])
@@ -214,13 +234,23 @@ def update_sale(sale_id):
         if field in request_data:
             updated_sale[field] = request_data[field]
 
-    # Calculate total_price based on qty and unit_price
-    updated_sale['total_price'] = updated_sale.get('qty', 0) * updated_sale.get('unit_price', 0)
+    # If product_id or qty or unit_price is updated, recalculate total_price
+    if 'product_id' in updated_sale or 'qty' in updated_sale or 'unit_price' in updated_sale:
+        product_id = updated_sale.get('product_id')
+        product = products.find_one({'_id': ObjectId(product_id)})
+        if product is None:
+            return jsonify({'error': 'Product not found'}), 404
+        updated_sale['unit_price'] = product['unit_price']
+        updated_sale['total_price'] = product['unit_price'] * updated_sale.get('qty', 0)
+    else:
+        # Calculate total_price based on qty and unit_price
+        updated_sale['total_price'] = updated_sale.get('qty', 0) * updated_sale.get('unit_price', 0)
 
     sale_oid = ObjectId(sale_id)
     sale = mongo.db.sales.find_one({'_id': sale_oid})
     if not sale:
         return jsonify({'error': 'Sale not found'}), 404
+
     mongo.db.sales.update_one({'_id': sale_oid}, {'$set': updated_sale})
     return jsonify({'message': 'Sale data updated'}), 200
 
